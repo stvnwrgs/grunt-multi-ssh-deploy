@@ -1,0 +1,23 @@
+{
+  "name": "grunt-multi-ssh-deploy",
+  "version": "0.0.1",
+  "description": "A Grunt Task for deploying webapplications to many server and many environments via ssh with symlink zero downtime",
+  "main": "index.js",
+  "scripts": {
+    "test": "console.log(\"yo\");"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:stvnwrgs/grunt-multi-ssh-deploy.git"
+  },
+  "keywords": [
+    "deployment",
+    "deploy",
+    "scp"
+  ],
+  "author": "Steven Wirges",
+  "license": "GPL2",
+  "bugs": {
+    "url": "https://github.com/stvnwrgs/grunt-multi-ssh-deploy/issues"
+  }
+}
