@@ -10,41 +10,100 @@
 
 module.exports = function(grunt) {
 
+  // multi_ssh_deploy:{
+  //   live: {
+  //     options: {
+  //       username: 'deployer',
+  //       password: '',
+  //       privateKeyPath: '~/.ssh/id_rsa',
+  //       passphrase: '',
+  //       srcPath: './build/',
+  //       releasePath: '/var/www/project/releases',
+  //       currentPath: '/var/www/project/current',
+  //       deleteOldVersions: 2,
+  //     }
+  //     server: [
+  //       '192.168.0.1',
+  //       '192.168.0.2',
+  //     ],
+  //   }
+  // }
+
   // Please see the Grunt documentation for more information regarding task
   // creation: http://gruntjs.com/creating-tasks
 
   grunt.registerMultiTask('multi_ssh_deploy', 'A Grunt Task for deploying webapplications to many server and many environments via scp with symlink zero downtime', function() {
-    // Merge task-specific and/or target-specific options with these defaults.
-    var options = this.options({
-      punctuation: '.',
-      separator: ', '
+    var self = this;
+    var async = require('async');
+    var ssh = require('ssh2');
+    var done = self.async();
+
+    var options = self.options();
+    var server = self.data.server;
+
+    var execute = function(connection) {
+
+      var exec = function (connection, cmd) {
+        connection.exec(cmd, function(err, stream) {
+          if (err) throw err;
+          stream.on('data', function(data, extended) {
+            console.log((extended === 'stderr' ? 'STDERR: ' : 'STDOUT: ')
+                        + data);
+          });
+          stream.on('end', function() {
+            console.log('Stream :: EOF');
+          });
+          stream.on('close', function() {
+            console.log('Stream :: close');
+          });
+          stream.on('exit', function(code, signal) {
+            console.log('Stream :: exit :: code: ' + code + ', signal: ' + signal);
+            connection.end();
+          });
+        });
+      }
+
+      exec(connection, 'cd /var/www');
+      
+    };
+
+    var rollback = function(release) {
+
+    }
+    console.log(server);
+
+    async.forEach(server, function(serv) {
+
+      var c = new ssh();
+      
+      c.on('connect', function() {
+        console.log('Connecting to server: ' + serv);
+      });
+      c.on('ready', function() {
+        console.log('Connected to server: ' + serv);
+        execute(c);
+        //c.end();//execSingleServer(server,c);
+      });
+      c.on('error', function(err) {
+        console.log("Error on server: " + serv)
+        console.error(err);
+        if (err) {throw err;}
+      });
+      c.on('close', function(had_error) {
+        console.log("Closed connection for server: " + serv);
+        //checkCompleted();
+      });
+     
+      c.connect({
+        host: serv,
+        port: options.port,
+        username: options.username,
+        privateKey: require('fs').readFileSync(options.privateKeyPath),
+        passphrase: options.passphrase,
+      });
+      //c.end();
     });
 
-    // Iterate over all specified file groups.
-    this.files.forEach(function(f) {
-      // Concat specified files.
-      var src = f.src.filter(function(filepath) {
-        // Warn on and remove invalid source files (if nonull was set).
-        if (!grunt.file.exists(filepath)) {
-          grunt.log.warn('Source file "' + filepath + '" not found.');
-          return false;
-        } else {
-          return true;
-        }
-      }).map(function(filepath) {
-        // Read file source.
-        return grunt.file.read(filepath);
-      }).join(grunt.util.normalizelf(options.separator));
-
-      // Handle options.
-      src += options.punctuation;
-
-      // Write the destination file.
-      grunt.file.write(f.dest, src);
-
-      // Print a success message.
-      grunt.log.writeln('File "' + f.dest + '" created.');
-    });
   });
 
 };
