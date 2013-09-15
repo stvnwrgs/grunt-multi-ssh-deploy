@@ -41,7 +41,38 @@ module.exports = function(grunt) {
     var options = self.options();
     var server = self.data.server;
 
-    var execute = function(connection) {
+    var taskChain = '';
+
+    var addTask = function (task) {
+      if (taskChain != '') {
+        taskChain += ' && '
+      }
+      taskChain += task;
+    }
+    
+    var packRepo = function () 
+    {
+
+      taskChain = '';
+      addTask('rm -rf ./release');
+      addTask('git clone -b ' + options.repoBranchs + ' ' + options.repoUrl + ' ./release');
+      addTask('tar cfv release.tar ./release');
+      return task
+    }
+
+    var sendRelease =  function () {
+      taskChain = '';
+
+      return taskChain;
+    }
+
+    var symlink = function () {
+
+    }
+
+    var execute = function(connection, tasks) {
+
+      console.log(tasks);
 
       var exec = function (connection, cmd) {
         connection.exec(cmd, function(err, stream) {
@@ -62,47 +93,48 @@ module.exports = function(grunt) {
           });
         });
       }
-
-      exec(connection, 'cd /var/www');
       
+      exec(connection, tasks);
     };
 
-    var rollback = function(release) {
+    function rollback(release) {
 
     }
-    console.log(server);
 
-    async.forEach(server, function(serv) {
+    function connectServers (servers, task) {
+      async.forEach(servers, function(serv) {
+        var c = new ssh();
+        
+        c.on('connect', function() {
+          console.log('Connecting to server: ' + serv);
+        });
+        c.on('ready', function() {
+          console.log('Connected to server: ' + serv);
+          execute(c,deploy());
+          //c.end();//execSingleServer(server,c);
+        });
+        c.on('error', function(err) {
+          console.log("Error on server: " + serv)
+          console.error(err);
+          if (err) {throw err;}
+        });
+        c.on('close', function(had_error) {
+          console.log("Closed connection for server: " + serv);
+          //checkCompleted();
+        });
+       
+        c.connect({
+          host: serv,
+          port: options.port,
+          username: options.connection.username,
+          privateKey: require('fs').readFileSync(options.connection.privateKeyPath),
+          passphrase: options.connection.passphrase,
+        });
+        //c.end();
+      });
+    }
 
-      var c = new ssh();
-      
-      c.on('connect', function() {
-        console.log('Connecting to server: ' + serv);
-      });
-      c.on('ready', function() {
-        console.log('Connected to server: ' + serv);
-        execute(c);
-        //c.end();//execSingleServer(server,c);
-      });
-      c.on('error', function(err) {
-        console.log("Error on server: " + serv)
-        console.error(err);
-        if (err) {throw err;}
-      });
-      c.on('close', function(had_error) {
-        console.log("Closed connection for server: " + serv);
-        //checkCompleted();
-      });
-     
-      c.connect({
-        host: serv,
-        port: options.port,
-        username: options.username,
-        privateKey: require('fs').readFileSync(options.privateKeyPath),
-        passphrase: options.passphrase,
-      });
-      //c.end();
-    });
+    connectServers(server);
 
   });
 
