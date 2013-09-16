@@ -50,24 +50,65 @@ module.exports = function(grunt) {
       taskChain += task;
     }
     
-    var packRepo = function () 
-    {
+    function run_cmd(cmd, args, callBack ) {
+      var spawn = require('child_process').spawn;
+      var child = spawn(cmd, args);
+      var resp = "";
 
-      taskChain = '';
-      addTask('rm -rf ./release');
-      addTask('git clone -b ' + options.repoBranchs + ' ' + options.repoUrl + ' ./release');
-      addTask('tar cfv release.tar ./release');
-      return task
+      child.stdout.on('data', function (buffer) { resp += buffer.toString() });
+      child.stdout.on('end', function() { callBack (resp) });
     }
 
-    var sendRelease =  function () {
-      taskChain = '';
+    var packRepo = function (callback) {
+      console.log(options.repoBranch);
+      console.log(options.repoUrl); 
 
-      return taskChain;
+      run_cmd('ls', ['-lisa'], function(text) { console.log (text) });
+      run_cmd('rm', ['-rf', './release'], function(text) {
+        console.log (text) 
+        run_cmd('git', ['clone', '-b', options.repoBranch, options.repoUrl, './release' ], function(text) {
+          console.log (text) 
+          run_cmd('tar', ['cfv', 'release.tar','./release' ], function(text) {
+            console.log (text)
+            callback();
+          });
+        });
+      });
     }
+
+    // var sendRelease =  function (packageName) {
+    //   taskChain = '';
+    //   addTask()
+    //   return taskChain;
+    // }
 
     var symlink = function () {
 
+    }
+
+    var deploy = function (connection) {
+      connection.sftp(function(err, sftp) {
+        if (err) throw err;
+        sftp.on('end', function() {
+          console.log('SFTP :: SFTP session closed');
+        });
+        sftp.fastPut('release.tar', '/var/www/project', function readdir(err, handle) {
+          if (err) throw err;
+          sftp.readdir(handle, function(err, list) {
+            if (err) throw err;
+            if (list === false) {
+              sftp.close(handle, function(err) {
+                if (err) throw err;
+                console.log('SFTP :: Handle closed');
+                sftp.end();
+              });
+              return;
+            }
+            console.dir(list);
+            readdir(undefined, handle);
+          });
+        });
+      });
     }
 
     var execute = function(connection, tasks) {
@@ -101,7 +142,7 @@ module.exports = function(grunt) {
 
     }
 
-    function connectServers (servers, task) {
+    function connectServers (servers) {
       async.forEach(servers, function(serv) {
         var c = new ssh();
         
@@ -110,7 +151,7 @@ module.exports = function(grunt) {
         });
         c.on('ready', function() {
           console.log('Connected to server: ' + serv);
-          execute(c,deploy());
+          deploy(c);
           //c.end();//execSingleServer(server,c);
         });
         c.on('error', function(err) {
@@ -133,8 +174,8 @@ module.exports = function(grunt) {
         //c.end();
       });
     }
-
-    connectServers(server);
+    packRepo(connectServers(server));
+   // connectServers(server);
 
   });
 
